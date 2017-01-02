@@ -61,52 +61,28 @@ function fetchForecast(city){
 function fetchWeather(city){
   const operations = new Operation();
 
-  let finished = false;
-
   getWeather(city, (err, res) => {
-    finished = true;
     if (err){
-      executeObservers(err);
+      operations.fail(err);
       return;
     }
-    executeObservers(null, res);
+    operations.succeed(res);
   });
-
-  function executeObservers(err, res){
-    if (finished === true){
-      if (err){
-        operations.fail();
-      } else {
-        operations.succeed();
-      }
-    }
-  }
 
   return operations;
 }
 
 function fetchCurrentCity(){
   const operations = new Operation();
-  let finished = false;
-
+  
   getCurrentCity((err, res) => {
-    finished = true;
+    console.log(res);
     if (err){
-      executeObservers(err);
+      operations.fail(err);
       return;
     }
-    executeObservers(null, res);
+    operations.succeed(res);
   });
-
-  function executeObservers(err, res){
-    if (finished === true){
-      if (err){
-        operations.fail();
-      } else {
-        operations.succeed();
-      }
-    }
-  }
 
   return operations;
 }
@@ -116,41 +92,126 @@ function Operation(){
   const operation = {
     _successReactions: [],
     _errorReactions: [],
+    _state: 'pending',
+    _result: null,
   };
 
-  operation.onCompletion = function onCompletion(success, error){
-    operation._successReactions.push(success);
-    operation._errorReactions.push(error);
+  operation.onCompletion = function onCompletion(successFn, errorFn){
+    const completionOp = new Operation();
+    
+    if (operation._state === 'fail'){
+      return errorHandler();
+    }
+    if (operation._state === 'success'){
+      return successHandler();
+    }
+
+    operation._successReactions.push(successHandler);
+    operation._errorReactions.push(errorHandler);
+
+    return completionOp;
+
+    /// Private Functions ////
+    function successHandler(){
+      if (successFn) {
+        let callbackRes = successFn(operation._result);
+        if (callbackRes && callbackRes.onCompletion){
+          return callbackRes.forwardCompletion(completionOp);
+        }
+      }
+    }
+
+    function errorHandler(){
+      if (errorFn){
+        errorFn(operation._result);
+      }
+    }
   };
+  operation.then = operation.onCompletion;
+
   operation.onFailure = function onFailure(error){
-    operation.onCompletion(null, error);
+    return operation.onCompletion(null, error);
   };
+
   operation.fail = function fail(err){
+    operation._state = 'fail';
+    operation._result = err;
+
     operation._errorReactions.forEach((fn) => {
-      if (fn){
         fn(err);
-      }
     });
     operation.clear();
   };
+
   operation.succeed = function succeed(result){
+    operation._state = 'success';
+    operation._result = result;
     operation._successReactions.forEach((fn) => {
-      if (fn){
-        fn(result);
-      }
+      fn(result);
     });
     operation.clear();
   };
+
   operation.clear = function clear(){
     operation._successReactions = [];
     operation._errorReactions = [];
-  }
+  };
+  
+  operation.forwardCompletion = function forwardCompletion(op){
+    operation.onCompletion(op.succeed, op.fail);
+  };
 
   return operation;
 }
 
 
 suite('operations');
+
+test('avoiding nested async', done => {
+  let weatherOp = fetchCurrentCity()
+    .then(fetchWeather)
+    .then(checkWeather);
+
+  function checkWeather(weather){
+    if (weather){
+      done();
+    }
+  }
+});
+
+test('lexical parallelism', done => {
+  let city = 'Sydney';
+  let weather = fetchWeather(city);
+  let forecast = fetchForecast(city);
+
+  weather.onCompletion((currWeather) => {
+    forecast.onCompletion((currForecast) => {
+      console.log(currWeather);
+      console.log(currForecast);
+      done();
+    });
+  })
+});
+
+test('register error async', done => {
+  let currentCity = fetchWeather();
+
+  waitAsync(() => {
+    currentCity.onFailure((err) => {
+      done();
+    })
+  });
+});
+
+test('register success async', done => {
+  let currentCity = fetchCurrentCity();
+
+  waitAsync(() => {
+    currentCity.onCompletion((city) => {
+      done();
+    })
+  });
+});
 
 test("pass multiple callbacks - all of them called.", done => {
   const op = fetchCurrentCity();
@@ -167,7 +228,7 @@ test("register only error Handler, ignore success.", done => {
   op.onFailure(res => done());
 });
 
-test("test fetchForecast with operations type.", done => {
+test("fetchForecast with operations type.", done => {
   const op = fetchForecast('cityname');
   const multiDone = callDone(done).afterNCalls(2);
 
