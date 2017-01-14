@@ -15,5 +15,5 @@ function callDone(doneFn){
 }
 
 function waitAsync(fn){
-    return setTimeout(fn, 1); 
+    return setTimeout(fn, 1);
 }
