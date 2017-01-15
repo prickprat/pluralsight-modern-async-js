@@ -5,6 +5,22 @@ function* weatherFinder(){
     return weather;
 }
 
+function* forecastAndWeatherFinder(){
+    let city = yield fetchCurrentCity();
+    //Make sure these run in parallel
+    let weatherRequest = fetchWeather(city);
+    let forecastRequest = fetchForecast(city);
+
+
+    let forecast = yield forecastRequest;
+    let weather = yield weatherRequest;
+
+    return {
+        weather,
+        forecast,
+    };
+}
+
 function* weatherFinderFail(){
     let city = yield fetchCurrentCity();
     let weather = yield fetchWeather();
@@ -53,3 +69,11 @@ test('serialized async operation fail', () => {
             expect(e.message).toBe('City required to get weather');
         });
 });
+
+test('parallel async operation success', () => {
+    return awaiter(forecastAndWeatherFinder())
+        .then((res) => {
+            expect(res.forecast).toBe(expectedForecast);
+            expect(res.weather).toBe(expectedWeather);
+        });
+})

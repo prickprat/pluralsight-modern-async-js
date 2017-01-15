@@ -3,16 +3,19 @@ const expectedCurrentCity = 'New York, NY';
 const expectedForecast = {
     fiveDay: [60, 70, 80, 45, 50]
 };
+const expectedWeather = {
+    temp: 50,
+};
+const expectedCity = 'New York, NY';
+
 
 function getCurrentCity(callback) {
     setTimeout(function () {
 
-        const city = 'New York, NY';
-        callback(null, city);
+        callback(null, expectedCity);
 
     }, delayms);
 }
-
 function getWeather(city, callback) {
     setTimeout(function () {
 
@@ -20,16 +23,10 @@ function getWeather(city, callback) {
             callback(new Error('City required to get weather'));
             return;
         }
-
-        const weather = {
-            temp: 50
-        };
-
-        callback(null, weather);
+        callback(null, expectedWeather);
 
     }, delayms);
 }
-
 function getForecast(city, callback) {
     setTimeout(function () {
 
